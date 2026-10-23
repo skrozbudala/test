@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Portail Interne GMAO - Équipements Industriels</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; color: #2c3e50; }
+        header { background: #1e293b; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
+        .container { max-width: 1200px; margin: 25px auto; padding: 0 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        .badge { padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .en-service { background: #dcfce7; color: #166534; }
+        .en-maintenance { background: #fef9c3; color: #854d0e; }
+        .en-panne { background: #fee2e2; color: #991b1b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th, td { border-bottom: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+        th { background: #f8fafc; color: #475569; }
+        input, select, button { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; margin: 4px 0; }
+        button { background: #2563eb; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #1d4ed8; }
+        .alert { padding: 12px; border-radius: 5px; margin-bottom: 15px; font-weight: bold; }
+        .alert-danger { background: #fee2e2; color: #991b1b; }
+        .alert-success { background: #dcfce7; color: #166534; }
+        .grid-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <strong>SI INDUSTRIEL — GESTION DES ÉQUIPEMENTS (VLAN 60)</strong>
+    </div>
+    {% if session.get('user') %}
+    <div>
+        Connecté : <strong>{{ session['nom_complet'] }}</strong> 
+        | Rôle : <span class="badge en-maintenance">{{ session['role'] }}</span>
+        | <a href="{{ url_for('logout') }}" style="color: #fca5a5; text-decoration: none; margin-left: 10px;">Déconnexion</a>
+    </div>
+    {% endif %}
+</header>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if page == 'login' %}
+    <div class="card" style="max-width: 420px; margin: 60px auto;">
+        <h2>Authentification Interne</h2>
+        <p style="font-size: 13px; color: #64748b;">Accès strictement réservé au personnel industriel autorisé.</p>
+        <form method="POST" action="{{ url_for('login') }}">
+            <label>Identifiant utilisateur (AD / Interne)</label><br>
+            <input type="text" name="username" required style="width: 94%;"><br><br>
+            <label>Mot de passe</label><br>
+            <input type="password" name="password" required style="width: 94%;"><br><br>
+            <button type="submit" style="width: 100%;">Se connecter</button>
+        </form>
+        <hr style="margin-top:20px; border:0; border-top:1px solid #e2e8f0;">
+        <small style="color:#64748b;">
+            <strong>Comptes de test pour la recette :</strong><br>
+            • <code>operateur</code> / <code>Operateur2026!</code> (Consultation seule)<br>
+            • <code>technicien</code> / <code>Technicien2026!</code> (Ajout & Modification)<br>
+            • <code>responsable</code> / <code>Responsable2026!</code> (Accès + Journal d'audit)<br>
+            • <code>comptable</code> / <code>Comptable2026!</code> (Test refus d'accès)
+        </small>
+    </div>
+
+    {% else %}
+    <!-- TABLEAU DES ÉQUIPEMENTS (Accessible en LECTURE, MAINTENANCE et ADMIN) -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>Inventaire et État des Équipements Industriels</h2>
+            <form method="GET" action="{{ url_for('dashboard') }}">
+                Filtrer par état :
+                <select name="statut" onchange="this.form.submit()">
+                    <option value="">Tous les équipements</option>
+                    <option value="En service" {% if statut_filtre == 'En service' %}selected{% endif %}>En service</option>
+                    <option value="En maintenance" {% if statut_filtre == 'En maintenance' %}selected{% endif %}>En maintenance</option>
+                    <option value="En panne" {% if statut_filtre == 'En panne' %}selected{% endif %}>En panne</option>
+                </select>
+            </form>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Code Actif</th>
+                    <th>Désignation</th>
+                    <th>Zone / Atelier</th>
+                    <th>IP Équipement</th>
+                    <th>Statut</th>
+                    <th>Dernière Inspection</th>
+                    <th>Observations Techniques</th>
+                    {% if session['role'] in ['MAINTENANCE', 'ADMIN'] %}
+                    <th>Mise à jour rapide</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in equipements %}
+                <tr>
+                    <td><strong>{{ eq.code_actif }}</strong></td>
+                    <td>{{ eq.nom }}</td>
+                    <td>{{ eq.zone_atelier }}</td>
+                    <td><code>{{ eq.ip_equipement }}</code></td>
+                    <td>
+                        {% if eq.statut == 'En service' %}
+                            <span class="badge en-service">En service</span>
+                        {% elif eq.statut == 'En maintenance' %}
+                            <span class="badge en-maintenance">En maintenance</span>
+                        {% else %}
+                            <span class="badge en-panne">En panne</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ eq.derniere_inspection }} <br><small style="color:#64748b;">par {{ eq.modifie_par }}</small></td>
+                    <td>{{ eq.commentaire }}</td>
+                    {% if session['role'] in ['MAINTENANCE', 'ADMIN'] %}
+                    <td>
+                        <form method="POST" action="{{ url_for('modifier_equipement', eq_id=eq.id) }}" style="display:flex; gap:5px;">
+                            <select name="statut">
+                                <option value="En service" {% if eq.statut == 'En service' %}selected{% endif %}>En service</option>
+                                <option value="En maintenance" {% if eq.statut == 'En maintenance' %}selected{% endif %}>En maintenance</option>
+                                <option value="En panne" {% if eq.statut == 'En panne' %}selected{% endif %}>En panne</option>
+                            </select>
+                            <input type="text" name="commentaire" value="{{ eq.commentaire }}" placeholder="Observation..." style="width:140px;">
+                            <button type="submit">OK</button>
+                        </form>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- FORMULAIRE D'AJOUT (Affiché uniquement pour MAINTENANCE et ADMIN) -->
+    {% if session['role'] in ['MAINTENANCE', 'ADMIN'] %}
+    <div class="card">
+        <h3>Renseigner un nouvel équipement industriel</h3>
+        <form method="POST" action="{{ url_for('ajouter_equipement') }}">
+            <div class="grid-form">
+                <input type="text" name="code_actif" placeholder="Code Actif (ex: CONVOYEUR-03)" required>
+                <input type="text" name="nom" placeholder="Désignation de la machine" required>
+                <input type="text" name="zone_atelier" placeholder="Zone / Atelier" required>
+                <input type="text" name="ip_equipement" placeholder="Adresse IP (ex: 10.10.200.90)" required>
+                <select name="statut">
+                    <option value="En service">En service</option>
+                    <option value="En maintenance">En maintenance</option>
+                    <option value="En panne">En panne</option>
+                </select>
+                <input type="text" name="commentaire" placeholder="Commentaire initial" required>
+            </div>
+            <button type="submit" style="margin-top:10px;">Enregistrer l'équipement</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- JOURNAL D'AUDIT (Affiché uniquement pour ADMIN) -->
+    {% if session['role'] == 'ADMIN' %}
+    <div class="card">
+        <h3>Journal de Traçabilité et d'Audit Sécurité (25 derniers événements)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Horodatage</th>
+                    <th>Utilisateur</th>
+                    <th>Rôle</th>
+                    <th>IP Source</th>
+                    <th>Action</th>
+                    <th>Détails</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.horodatage }}</td>
+                    <td><strong>{{ log.utilisateur }}</strong></td>
+                    <td>{{ log.role_utilisateur }}</td>
+                    <td><code>{{ log.ip_source }}</code></td>
+                    <td><strong>{{ log.action }}</strong></td>
+                    <td>{{ log.details }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+</body>
+</html>
