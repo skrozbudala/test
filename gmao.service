@@ -1,0 +1,14 @@
+[Unit]
+Description=Application Interne GMAO (Gunicorn)
+After=network.target
+
+[Service]
+User=gmao
+Group=gmao
+WorkingDirectory=/opt/gmao
+ExecStart=/usr/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 app:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
